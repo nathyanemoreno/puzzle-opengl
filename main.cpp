@@ -7,11 +7,13 @@
 float PIECE_WIDTH = 279.5f;
 float HALF_PIECE_WIDTH = PIECE_WIDTH / 2.0f;
 
-int WINDOW_WIDTH = 640;
+int WINDOW_WIDTH = 1080;
 int WINDOW_HEIGHT = 640;
 
 JigsawPosition *current;
 bool pieceSelected = false;
+
+float scale = 0.2f;
 
 float originX = 0;
 float originY = 0;
@@ -52,13 +54,16 @@ int main(int argc, char **argv)
   glutInit(&argc, argv);
   glutInitDisplayMode(GLUT_SINGLE | GLUT_RGBA);
   glutInitWindowPosition(100, 100);
-  glutInitWindowSize(640, 640);
+  glutInitWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
   glutCreateWindow("Jigsaw");
 
   glClearColor(0.152, 0.164, 0.207, 1.0);
   glOrtho(0, 640, 0, 640, -1, 1);
 
   glutDisplayFunc(render);
+  glutReshapeFunc(reshape);
+  glutMouseFunc(mouse);
+  glutMotionFunc(mouseMotion);
 
   glutMainLoop();
   return 0;
@@ -292,16 +297,16 @@ void drawJigsawCurve(JigsawPieceEdge edge, EdgeType edgeType, float centerX, flo
   }
 }
 
-bool isPieceSelected(int x, int y)
+bool isPieceSelected(float scale, int x, int y)
 {
   for (int i = 0; i < 2; i++)
   {
 
-    if (x > pieces[i].x - HALF_PIECE_WIDTH && x < pieces[i].x + HALF_PIECE_WIDTH &&
-        y > pieces[i].y - HALF_PIECE_WIDTH && y < pieces[i].y + HALF_PIECE_WIDTH)
+    if (x > pieces[i].x - HALF_PIECE_WIDTH * scale && x < pieces[i].x + HALF_PIECE_WIDTH * scale &&
+        y > pieces[i].y - HALF_PIECE_WIDTH * scale && y < pieces[i].y + HALF_PIECE_WIDTH * scale)
     {
       current = &pieces[i];
-      std::cout << current->x << std::endl;
+      std::cout << current->x << "--" << current->y << std::endl;
       return true;
     }
   }
@@ -317,31 +322,34 @@ void render(void)
 
   for (int i = 0; i < 2; i++)
   {
+    glPushMatrix();
+    glTranslatef(-pieces[i].x * scale, -pieces[i].y * scale, 0.0f);
+    glScalef(scale, scale, 1.0f);
+    glTranslatef(pieces[i].x / scale, pieces[i].y / scale, 0.0f);
     drawJigsawPiece(pieces[i]);
+    glPopMatrix();
   }
-
-  glutReshapeFunc(reshape);
-  glutMouseFunc(mouse);
-  glutMotionFunc(mouseMotion);
-
   glFlush();
 }
 
 void mouse(int button, int state, int x, int y)
 {
+  std::cout << pieceSelected << std::endl;
   switch (button)
   {
   case GLUT_LEFT_BUTTON:
     if (state == GLUT_DOWN)
     {
-      std::cout << pieceSelected << std::endl;
-      pieceSelected = true;
-      isPieceSelected(x, y);
+      if (isPieceSelected(0.5f, x, WINDOW_HEIGHT - y))
+      {
+        pieceSelected = true;
+      }
+      else
+      {
+        pieceSelected = false;
+      }
     }
-    else
-    {
-      pieceSelected = false;
-    }
+
     break;
 
   default:
@@ -354,7 +362,7 @@ void mouseMotion(int x, int y)
   if (pieceSelected)
   {
     current->x = x;
-    current->y = 640 - y;
+    current->y = WINDOW_HEIGHT - y;
 
     glutPostRedisplay();
   }
@@ -369,13 +377,15 @@ void reshape(int w, int h)
   WINDOW_WIDTH = w;
   WINDOW_HEIGHT = h;
 
-  scaleX = w / 640.0f;
-  scaleY = h / 640.0f;
+  // scaleX = w / WINDOW_WIDTH;
+  // scaleY = h / WINDOW_HEIGHT;
 
-  jigSawPuzzleSize = std::min(scaleX, scaleY) * 80 - 9;
+  // jigSawPuzzleSize = std::min(scaleX, scaleY) * 40 - 9;
 
-  originX = (w - 8 * jigSawPuzzleSize) / 2.0f;
-  originY = (h - 8 * jigSawPuzzleSize) / 2.0f;
+  // originX = (w - 8 * jigSawPuzzleSize) / 2.0f;
+  // originY = (h - 8 * jigSawPuzzleSize) / 2.0f;
 
+  glLoadIdentity();
+  glOrtho(0, w, 0, h, -1, 1);
   glutPostRedisplay();
 }
