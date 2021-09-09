@@ -15,6 +15,8 @@ int WINDOW_HEIGHT = 640;
 JigsawPosition *current;
 bool pieceSelected = false;
 
+float scale = 0.2f;
+
 float originX = 0;
 float originY = 0;
 
@@ -26,15 +28,11 @@ float jigSawPuzzleSize = 80;
 upng_t *upng;
 GLuint texture;
 
-// JigsawPiece piece = {
-//     {true, false},
-//     {true, true},
-//     {false, true},
-//     {false, false},
-// };
+const int PUZZLE_PIECES_WIDTH = 16;
+const int PUZZLE_PIECES_HEIGHT = 9;
+const int PUZZLE_PIECES_COUNT = PUZZLE_PIECES_WIDTH * PUZZLE_PIECES_HEIGHT;
 
-const float PUZZLE_PIECES_COUNT = 1;
-JigsawPosition puzzlePieces[144];
+JigsawPosition puzzlePieces[PUZZLE_PIECES_COUNT];
 
 // ============ GLUT FUNCTIONS ============ //
 void render(void);
@@ -56,22 +54,21 @@ void initTexture() {
 
 void initJigsawPuzzle() {
   /* initialize random seed: */
-  srand (time(NULL));
-  
-  for (int r = 0; r < 9; r++) {
-    for (int c = 0; c < 16; c++) {
-      std::cout << rand() % 10;
-      puzzlePieces[c + r * 16] = {
-          320,
-          320,
+  srand(time(NULL));
+
+  for (int r = 0; r < PUZZLE_PIECES_HEIGHT; r++) {
+    for (int c = 0; c < PUZZLE_PIECES_WIDTH; c++) {
+      puzzlePieces[c + r * PUZZLE_PIECES_WIDTH] = {
+          100 + c * (80 + PIECE_WIDTH) * scale,
+          100 + (PUZZLE_PIECES_HEIGHT - r) * (80 + PIECE_WIDTH) * scale,
           {// TOP
-           {r == 0, r > 0 ? !puzzlePieces[c + (r - 1) * 16].piece.bottom.isMirroring : (rand() % 10 < 5)},
+           {r == 0, r > 0 ? !puzzlePieces[c + (r - 1) * PUZZLE_PIECES_WIDTH].piece.bottom.isMirroring : (rand() % 10 < 5)},
            // RIGHT
-           {c == 15, (rand() % 10 < 5)},
+           {c == PUZZLE_PIECES_WIDTH - 1, (rand() % 10 < 5)},
            // BOTTOM
-           {r == 8, (rand() % 10 < 5)},
+           {r == PUZZLE_PIECES_HEIGHT - 1, (rand() % 10 < 5)},
            // LEFT
-           {c == 0, c > 0 ? !puzzlePieces[(c - 1) + r * 16].piece.right.isMirroring : (rand() % 10 < 5)}}
+           {c == 0, c > 0 ? !puzzlePieces[(c - 1) + r * PUZZLE_PIECES_WIDTH].piece.right.isMirroring : (rand() % 10 < 5)}}
           // break line
       };
     }
@@ -82,13 +79,16 @@ int main(int argc, char **argv) {
   glutInit(&argc, argv);
   glutInitDisplayMode(GLUT_SINGLE | GLUT_RGBA | GLUT_STENCIL);
   glutInitWindowPosition(100, 100);
-  glutInitWindowSize(640, 640);
+  glutInitWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
   glutCreateWindow("JigSaw Puzzle OpenGL");
 
   glClearColor(0.152, 0.164, 0.207, 1.0);
-  glOrtho(0, 640, 640, 0, -1, 1);
+  glOrtho(0, 640, 0, 640, -1, 1);
 
   glutDisplayFunc(render);
+  glutReshapeFunc(reshape);
+  glutMouseFunc(mouse);
+  glutMotionFunc(mouseMotion);
 
   initJigsawPuzzle();
   initTexture();
@@ -115,13 +115,13 @@ void drawJigsawCurve(JigsawPieceEdge edge, EdgeType edgeType, float centerX, flo
   int limit1 = edge.isMirroring ? 24 : 14;
   int limit2 = edge.isMirroring ? 23 : 33;
 
-  std::cout << "---- Drawing Piece Edge ----" << std::endl;
-  std::cout << "drawVertically: ";
-  std::cout << drawVertically << std::endl;
-  std::cout << "scaleX: ";
-  std::cout << scaleX << std::endl;
-  std::cout << "scaleY: ";
-  std::cout << scaleY << std::endl;
+  // std::cout << "---- Drawing Piece Edge ----" << std::endl;
+  // std::cout << "drawVertically: ";
+  // std::cout << drawVertically << std::endl;
+  // std::cout << "scaleX: ";
+  // std::cout << scaleX << std::endl;
+  // std::cout << "scaleY: ";
+  // std::cout << scaleY << std::endl;
 
   // T: -1 / R: 1 / B: -1 / L: -1
   curveOriginX = centerX + HALF_PIECE_WIDTH * (edgeType == RIGHT ? 1 : -1);
@@ -281,14 +281,15 @@ void drawJigsawPieceEdge(JigsawPieceEdge edge, EdgeType edgeType, float centerX,
   }
 }
 
-void drawJigsawPiece(JigsawPosition position) {
+void drawJigsawPiece(JigsawPosition position, int index) {
   // Draw: piece
   glStencilOp(GL_FALSE, GL_FALSE, GL_REPLACE);
-  glStencilFunc(GL_ALWAYS, 1, 0xFF);
+  glStencilFunc(GL_ALWAYS, index, 0xFF);
 
   JigsawPiece piece = position.piece;
 
   // Draw TOP (white)
+  // glColor3f(1, 1, 1);
   drawJigsawPieceEdge(piece.top, TOP, position.x, position.y);
 
   // Draw RIGHT (cyan)
@@ -310,22 +311,70 @@ void drawJigsawPiece(JigsawPosition position) {
   glBindTexture(GL_TEXTURE_2D, texture);
 
   glStencilOp(GL_FALSE, GL_FALSE, GL_KEEP);
-  glStencilFunc(GL_EQUAL, 1, 0xFF);
-  // glEnable(GL_BLEND);
-  // glBlendFunc(GL_DST_COLOR, GL_ZERO);
+  glStencilFunc(GL_EQUAL, index, 0xFF);
+
   glBegin(GL_POLYGON);
 
-  glTexCoord2f(0.0, 0.0);
-  glVertex2i(100, 100);
+  int idx = index - 1;
+  int pC = idx % PUZZLE_PIECES_WIDTH;
+  int pR = idx / PUZZLE_PIECES_WIDTH;
 
-  glTexCoord2f(1.0, 0.0);
-  glVertex2i(540, 100);
+  float figureHeight = PUZZLE_PIECES_HEIGHT * PIECE_WIDTH;
+  float figureWidth = PUZZLE_PIECES_WIDTH * PIECE_WIDTH;
 
-  glTexCoord2f(1.0, 1.0);
-  glVertex2i(540, 540);
+  float left = position.piece.left.isFlat ? 0 : position.piece.left.isMirroring ? -7.5f
+                                                                                : -69.0f;
+  float top = position.piece.top.isFlat ? 0 : position.piece.top.isMirroring ? -7.5f
+                                                                             : -69.0f;
 
-  glTexCoord2f(0.0, 1.0);
-  glVertex2i(100, 540);
+  float width = PIECE_WIDTH - left + (position.piece.right.isFlat ? 0 : position.piece.right.isMirroring ? 7.5f
+                                                                                                         : 69.0f);
+  float height = PIECE_WIDTH - top + (position.piece.bottom.isFlat ? 0 : position.piece.bottom.isMirroring ? 7.5f
+                                                                                                           : 69.0f);
+
+  left += pC * PIECE_WIDTH;
+  top += pR * PIECE_WIDTH;
+
+  // width *= scale;
+  // height *= scale;
+  // left *= scale;
+  // top *= scale;
+
+  glTexCoord2f(left / figureWidth, (top + height) / figureHeight);
+  glVertex2i(
+      position.x - HALF_PIECE_WIDTH - (position.piece.left.isFlat ? 0 : position.piece.left.isMirroring ? 7.5
+                                                                                                        : 69),
+      position.y - HALF_PIECE_WIDTH - (position.piece.bottom.isFlat ? 0 : position.piece.bottom.isMirroring ? 7.5
+                                                                                                            : 69)
+      // break line
+  );
+
+  glTexCoord2f((left + width) / figureWidth, (top + height) / figureHeight);
+  glVertex2i(
+      position.x + HALF_PIECE_WIDTH + (position.piece.right.isFlat ? 0 : position.piece.right.isMirroring ? 7.5
+                                                                                                          : 69),
+      position.y - HALF_PIECE_WIDTH - (position.piece.bottom.isFlat ? 0 : position.piece.bottom.isMirroring ? 7.5
+                                                                                                            : 69)
+      // break line
+  );
+
+  glTexCoord2f((left + width) / figureWidth, top / figureHeight);
+  glVertex2i(
+      position.x + HALF_PIECE_WIDTH + (position.piece.right.isFlat ? 0 : position.piece.right.isMirroring ? 7.5
+                                                                                                          : 69),
+      position.y + HALF_PIECE_WIDTH + (position.piece.top.isFlat ? 0 : position.piece.top.isMirroring ? 7.5
+                                                                                                      : 69)
+      // break line
+  );
+
+  glTexCoord2f(left / figureWidth, top / figureHeight);
+  glVertex2i(
+      position.x - HALF_PIECE_WIDTH - (position.piece.left.isFlat ? 0 : position.piece.left.isMirroring ? 7.5
+                                                                                                        : 69),
+      position.y + HALF_PIECE_WIDTH + (position.piece.top.isFlat ? 0 : position.piece.top.isMirroring ? 7.5
+                                                                                                      : 69)
+      // break line
+  );
 
   glEnd();
   glDisable(GL_TEXTURE_2D);
@@ -333,11 +382,12 @@ void drawJigsawPiece(JigsawPosition position) {
 
 bool isPieceSelected(int x, int y) {
   for (int i = 0; i < PUZZLE_PIECES_COUNT; i++) {
-    JigsawPosition position = puzzlePieces[i];
-    if (x > position.x - HALF_PIECE_WIDTH && x < position.x + HALF_PIECE_WIDTH &&
-        y > position.y - HALF_PIECE_WIDTH && y < position.y + HALF_PIECE_WIDTH) {
-      current = &position;
-      std::cout << current->x << std::endl;
+    JigsawPosition *position = &puzzlePieces[i];
+
+    if (x > position->x - HALF_PIECE_WIDTH * scale && x < position->x + HALF_PIECE_WIDTH * scale &&
+        y > position->y - HALF_PIECE_WIDTH * scale && y < position->y + HALF_PIECE_WIDTH * scale) {
+      current = position;
+      std::cout << current->x << "--" << current->y << std::endl;
       return true;
     }
   }
@@ -349,7 +399,12 @@ void render(void) {
 
   glEnable(GL_STENCIL_TEST);
   for (int i = 0; i < PUZZLE_PIECES_COUNT; i++) {
-    drawJigsawPiece(puzzlePieces[i]);
+    glPushMatrix();
+    glTranslatef(-puzzlePieces[i].x * scale, -puzzlePieces[i].y * scale, 0.0f);
+    glScalef(scale, scale, 1.0f);
+    glTranslatef(puzzlePieces[i].x / scale, puzzlePieces[i].y / scale, 0.0f);
+    drawJigsawPiece(puzzlePieces[i], 1 + i);
+    glPopMatrix();
   }
 
   glFlush();
@@ -359,11 +414,11 @@ void mouse(int button, int state, int x, int y) {
   switch (button) {
   case GLUT_LEFT_BUTTON:
     if (state == GLUT_DOWN) {
-      std::cout << pieceSelected << std::endl;
-      pieceSelected = true;
-      isPieceSelected(x, y);
-    } else {
-      pieceSelected = false;
+      if (isPieceSelected(x, WINDOW_HEIGHT - y)) {
+        pieceSelected = true;
+      } else {
+        pieceSelected = false;
+      }
     }
     break;
 
@@ -375,7 +430,7 @@ void mouse(int button, int state, int x, int y) {
 void mouseMotion(int x, int y) {
   if (pieceSelected) {
     current->x = x;
-    current->y = 640 - y;
+    current->y = WINDOW_HEIGHT - y;
 
     glutPostRedisplay();
   }
@@ -389,13 +444,15 @@ void reshape(int w, int h) {
   WINDOW_WIDTH = w;
   WINDOW_HEIGHT = h;
 
-  scaleX = w / 640.0f;
-  scaleY = h / 640.0f;
+  // scaleX = w / WINDOW_WIDTH;
+  // scaleY = h / WINDOW_HEIGHT;
 
-  jigSawPuzzleSize = std::min(scaleX, scaleY) * 80 - 9;
+  // jigSawPuzzleSize = std::min(scaleX, scaleY) * 40 - 9;
 
-  originX = (w - 8 * jigSawPuzzleSize) / 2.0f;
-  originY = (h - 8 * jigSawPuzzleSize) / 2.0f;
+  // originX = (w - 8 * jigSawPuzzleSize) / 2.0f;
+  // originY = (h - 8 * jigSawPuzzleSize) / 2.0f;
 
+  glLoadIdentity();
+  glOrtho(0, w, 0, h, -1, 1);
   glutPostRedisplay();
 }
