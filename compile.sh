@@ -1,3 +1,3 @@
-g++ main.cpp -o build.o -lglut -lGLU -lGL
+g++ src/main.cpp include/upng/upng.c -o build.o -lglut -lGLU -lGL
 
 ./build.o

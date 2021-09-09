@@ -60,7 +60,7 @@ enum EdgeType {
 
 struct JigsawPieceEdge {
   bool isFlat;
-  bool isMirrorning;
+  bool isMirroring;
 };
 
 struct JigsawPiece {
